@@ -1,0 +1,23 @@
+{
+  "name": "fnforms",
+  "version": "0.0.1",
+  "description": "forms for fntags",
+  "main": "fnforms.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SRFNStack/fnforms.git"
+  },
+  "keywords": [
+    "fntags",
+    "forms"
+  ],
+  "author": "Robert Kempton",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SRFNStack/fnforms/issues"
+  },
+  "homepage": "https://github.com/SRFNStack/fnforms#readme"
+}
