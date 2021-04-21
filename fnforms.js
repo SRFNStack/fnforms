@@ -1,37 +1,51 @@
-import { fnstate } from '../../lib/fntags.js'
-import { div, flexRow, form, h3, i, input, label, option, section, select, span } from '../../lib/fnelements.js'
-import { afterRouteChange, beforeRouteChange, listenFor } from '../../lib/fnroute.js'
-import { isAuthenticated } from '../../fun/auth.js'
-import { flexCenteredRow } from './fnelements.js'
+import { fnstate } from '/lib/fntags.mjs'
+import { div, flexCenteredRow, flexRow, form, h2, i, input, label, option, section, select, span } from './fnelements.mjs'
+import { afterRouteChange, beforeRouteChange, listenFor } from './fnroute.mjs'
 
 /**
  * Create a formState that provides pre bound form elements
- * @param keyFn A function to extract the data's key from the data itself. The default uses the id property of the input, (foo) => foo.id
- * @param persistExpandState Whether to persist the expand state to local or session storage. Pass something truthy for local, and the string "session" for session
- * @return {*|HTMLDivElement|{expandedState: (function(*=): (*)), dropDown({title?: *, prop?: *, options: *}): HTMLDivElement, set(*=): void, bool({title?: *, prop?: *, initialValue?: *, style: *}): HTMLDivElement, clear: clear, float({title?: *, prop?: *, initialValue?: *, style: *}): HTMLDivElement, formGroup({title?: *, gridStyle?: *, expandable?: *, expandState?: *}, ...[*]): *, newForm: (function({isEdit?: *, onsubmit: *, key?: *, keyFn?: *, loadFn?: *, [p: string]: *}, ...[*]): HTMLFormElement), getState(): function(*=): (*), isDirty: (function(*=): (*)), isEdit: (function(*=): (*)), get(): *, text({title?: *, prop?: *, initialValue?: *, placeHolder?: *, style: *}): HTMLDivElement}|(function(*=): (*))}
+ * @param initialData The initial state data
  */
-export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } = {} ) {
-    if( typeof keyFn !== 'function' ) {
-        throw new Error( 'keyFn must be a function. It receives the current form data and should return the data\'s key' ).stack
-    }
-    const data = fnstate( {} )
-    let expandedState = {}
+export function formstate( initialData ) {
+    const data = fnstate( initialData )
     let clearAfterListener
     let clearBeforeListener
     const isEditState = fnstate( false )
     const isDirty = fnstate( false )
     let isEditDefault = false
 
-
-    const loadExpandedState = () => {
-        if( persistExpandState === 'session' ) {
-            sessionStorage.getItem()
+    class InputHandler {
+        constructor( { prop, transform, validations } ) {
+            this.transform = transform
+            this.prop = prop
+            this.validations = validations
+            this.errors = fnstate( [] )
+            this.isValid = fnstate( true )
+            this.handleInput = this.handleInput.bind( this )
         }
-    }
 
-    const updateData = ( prop, transform ) => ( e ) => {
-        isDirty( true )
-        data.setPath( prop, transform( e ), true )
+        handleInput( e ) {
+            isDirty( true )
+            let value = e.target.value
+            let errs = []
+            if( this.validations ) {
+                if( Array.isArray( this.validations ) ) {
+                    errs = this.validations.reduce( ( valid, validation ) => valid && validation( value ), true )
+                } else if( typeof this.validations === 'function' ) {
+                    errs = this.validations( value )
+                }
+                if( errs && !Array.isArray( errs ) ) {
+                    errs = [errs]
+                }
+            }
+            this.errors( errs )
+            if( errs.length === 0 ) {
+                this.isValid( true )
+                data.setPath( this.prop, this.transform ? this.transform( e ) : value, true )
+            } else {
+                this.isValid( false )
+            }
+        }
     }
 
     const initProp = ( prop, defaultValue ) => {
@@ -41,11 +55,8 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
     }
 
     const confirmClearDirty = () => {
-        //if the user is not authenticated, they probably got timed out and we don't want to erase their data
-        if( isDirty() && isAuthenticated() ) {
-            if( confirm( 'Form has unsaved changes.\nLeaving this page will erase those changes.\nWould you like to continue?' ) ) {
-                clear()
-            } else {
+        if( isDirty() ) {
+            if( !confirm( 'Form has unsaved changes.\nLeaving this page will erase those changes.\nWould you like to continue?' ) ) {
                 throw 'cancelled'
             }
         }
@@ -75,14 +86,6 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
         }
     } )
 
-    const getExpandedState = key => {
-        if( expandedState.hasOwnProperty( key ) ) {
-            return expandedState[ key ]
-        } else {
-            return expandedState[ key ] = fnstate( false )
-        }
-    }
-
     function formInput( title, theInput ) {
         return flexRow(
             {
@@ -95,22 +98,22 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
         )
     }
 
-    const newInput = ( { prop, initialValue, type, style, oninput, attrs } ) => input(
-        {
-            ...( attrs() ),
-            name: prop,
-            type: type,
-            style,
-            oninput,
-            disabled: isEditState.bindAttr( () => !isEditState() )
-        }
-    )
+    const newInput = ( { prop, type, style, transform, attrs, validations, initialValue } ) => {
+        initProp( prop, initialValue )
+        let inputHandler = new InputHandler( { prop, transform, validations } )
+        return input(
+            {
+                ...( attrs() ),
+                name: prop,
+                type: type,
+                style,
+                oninput: inputHandler.handleInput,
+                disabled: isEditState.bindAttr( () => !isEditState() )
+            }
+        )
+    }
 
     return {
-        commit(newData) {
-            data(newData)
-            isDirty(false)
-        },
         set( newData ) {
             data( newData )
             isDirty( true )
@@ -125,8 +128,7 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
          * Create a new form that is bound to this state
          * @param isEdit Whether the form should be in edit mode or not
          * @param onsubmit The onsubmit of the form, it should return the new data for the form state.
-         * @param key The key to set the state to, this ensures that the data for this key is always loaded
-         * @param loadFn A function to load the the data for the corresponding key
+         * @param onsuccess A function that will be called with the saved data after it's submitted by onsubmit
          * @param formAttrs All other properties are passed as attributes to the form element
          * @param children The children of the form element
          * @return {HTMLFormElement}
@@ -134,8 +136,7 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
         form: async function( {
                                   isEdit,
                                   onsubmit,
-                                  key,
-                                  loadFn,
+                                  onsuccess,
                                   ...formAttrs
                               },
                               ...children
@@ -143,24 +144,13 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
             isEditDefault = !!isEdit
             clearListeners()
 
-            if( typeof loadFn !== 'function' ) {
-                throw new Error( 'loadFn must be a function. It receives the current key' ).stack
-            }
-
             isEditState( !!isEdit )
-            setTimeout( () => {
-                clearBeforeListener = listenFor( beforeRouteChange, confirmClearDirty )
-                clearAfterListener = listenFor( afterRouteChange, () => {
-                    clearBeforeListener()
-                    clearAfterListener()
-                } )
-            } )
 
-            //fresh data, or key change
-            if( !data() || ( key && keyFn( data() ) !== key ) ) {
-                data( key ? await loadFn( key ) : {} )
-                isDirty( false )
-            }
+            clearBeforeListener = listenFor( beforeRouteChange, confirmClearDirty )
+            clearAfterListener = listenFor( afterRouteChange, () => {
+                clearBeforeListener()
+                clearAfterListener()
+            } )
 
             return form(
                 {
@@ -171,6 +161,9 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                         if( res ) {
                             data( res )
                             isDirty( false )
+                            if( typeof onsuccess === 'function' ) {
+                                onsuccess( res )
+                            }
                         }
                         return res
                     }
@@ -181,31 +174,30 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
         isEdit: isEditState,
         isDirty,
         clear,
-        expandedState: getExpandedState,
         formGroup(
             {
                 title,
                 gridStyle,
                 expandable = true,
-                expandState
+                isExpanded
             }, ...children
         ) {
             if( typeof expandable !== 'boolean' ) {
-                expandable = true
+                expandable = !!expandable
             }
-            if( typeof expandState !== 'function' ) {
-                expandState = fnstate( false )
+            if( typeof isExpanded !== 'function' ) {
+                isExpanded = fnstate( !!isExpanded )
             }
             if( !expandable ) {
-                expandState( true )
+                isExpanded( true )
             }
             return section(
-                title ? h3( {
+                title ? h2( {
                                 style: {
                                     'text-align': 'center',
                                     cursor: 'pointer'
                                 },
-                                onclick: () => expandable && expandState( !expandState() )
+                                onclick: () => expandable && isExpanded( !isExpanded() )
                             },
                             title,
                             expandable ? span( { style: { float: 'right' } },
@@ -215,7 +207,7 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                                                           'border-width': '0 3px 3px 0',
                                                           display: 'inline-block',
                                                           padding: '3px',
-                                                          transform: expandState.bindStyle( () => expandState() ? 'rotate(45deg)' : 'rotate(-135deg)' )
+                                                          transform: isExpanded.bindStyle( () => isExpanded() ? 'rotate(45deg)' : 'rotate(-135deg)' )
                                                       }
                                                   }
                                                )
@@ -225,7 +217,7 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                 div(
                     {
                         style: Object.assign( gridStyle, {
-                            display: expandState.bindStyle( () => expandState() ? 'grid' : 'none' ),
+                            display: isExpanded.bindStyle( () => isExpanded() ? 'grid' : 'none' ),
                             'justify-content': 'center'
                         } )
                     },
@@ -239,21 +231,21 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                 prop,
                 initialValue = '',
                 placeHolder = null,
-                style
+                style,
+                validations
             }
         ) {
             if( typeof initialValue !== 'string' ) {
                 initialValue = ''
             }
-            initProp( prop, initialValue )
             return formInput(
                 title,
                 newInput(
                     {
                         prop,
                         initialValue,
+                        validations,
                         type: 'text',
-                        oninput: updateData( prop, e => e.target.value ),
                         style,
                         attrs: () => ( {
                             value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
@@ -268,11 +260,10 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                 title,
                 prop,
                 initialValue = null,
-                style
+                style,
+                validations
             }
         ) {
-            initProp( prop, initialValue )
-            const doUpdate = updateData( prop, e => parseFloat( e.target.value ) )
             return formInput(
                 title,
                 newInput(
@@ -280,29 +271,30 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                         prop,
                         initialValue,
                         type: 'text',
-                        oninput: ( e ) => {
-                            const v = e.target.value
+                        transform: e => {
+                            let v = e.target.value
+                            //bad input is discarded instead of validations
                             if( v.match( /^[+-]?([0-9]*[.])?[0-9]+$/ ) ) {
-                                doUpdate( e )
+                                //number is valid float format
+                                return v
                             } else {
                                 if( v === '' ) {
-                                    e.target.value = ''
-                                    doUpdate( e )
+                                    return ''
                                 } else {
-                                    let numberOfDots = ( v.match( /\./g ) || [] ).length
-                                    if( numberOfDots >= 1 ) {
-                                        e.target.value = v.replace( /[.]+/, '.' )
-                                        if( ( e.target.value.match( /\./g ) || [] ).length > 1 ) {
-                                            e.target.value = v.slice( 0, -1 )
-                                        } else if( e.target.value.match( /[^0-9.]$/ ) ) {
-                                            e.target.value = v.slice( 0, -1 )
-                                        }
-                                    } else if( !v.match( /^[-+.]$/ ) ) {
+                                    //attempt to sanitize input
+                                    v = v.replaceAll( /[^-+0-9.]/g, '' )
+                                    if( v.match( /^[+-]?([0-9]*[.])?[0-9]*$/ ) ) {
+                                        //either only a +- sign or has a trailing .
+                                        return v
+                                    } else {
+                                        //extra bad data
                                         e.target.value = data.getPath( prop )
+                                        return data.getPath( prop )
                                     }
                                 }
                             }
                         },
+                        validations,
                         style,
                         attrs: () => ( {
                             value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
@@ -317,21 +309,21 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                 title,
                 prop,
                 initialValue = false,
-                style
+                style,
+                validations
             }
         ) {
             if( typeof initialValue !== 'boolean' ) {
                 initialValue = false
             }
-            initProp( prop, initialValue )
             return formInput(
                 title,
                 newInput(
                     {
                         prop,
                         initialValue,
+                        validations,
                         type: 'checkbox',
-                        oninput: updateData( prop, e => e.target.checked ),
                         style,
                         attrs: () => ( {
                             checked: data.bindAttr( () => !!( data.getPath( prop ) || initialValue ) )
@@ -344,9 +336,11 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
             {
                 title,
                 prop,
-                options
+                options,
+                validations
             } ) {
             initProp( prop, options[ 0 ] )
+            let inputHandler = new InputHandler( { prop, validations } )
             return formInput(
                 title,
 
@@ -357,7 +351,7 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                             'text-transform': 'capitalize'
                         },
                         disabled: isEditState.bindAttr( () => !isEditState() ),
-                        oninput: updateData( prop, e => e.target.value )
+                        oninput: inputHandler.handleInput
                     },
                     options.map(
                         o => option(
@@ -382,16 +376,22 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
         ) {
             options = options ?? {}
             const now = new Date()
-            initialValue = initialValue ?? now
-            if( !( initialValue instanceof Date ) ) {
-                throw 'date initial value must be a date'
-            }
-            initProp( prop, initialValue )
             let dt = data.getPath( prop )
-            if(!(dt instanceof Date)) {
-                dt = new Date(dt)
-                data.setPath(prop, dt)
+            if(dt){
+                initialValue = dt
+            } else if( !( dt instanceof Date ) ) {
+                dt = new Date( dt )
+                data.setPath( prop, dt )
+                initialValue = dt
+            } else {
+                initialValue = initialValue ?? now
+                if( !( initialValue instanceof Date ) ) {
+                    throw 'date initial value must be a date'
+                }
+                initProp( prop, initialValue )
             }
+
+
             const selectedDate =
                 fnstate( {
                              month: initialValue.getMonth() + 1,
@@ -469,7 +469,7 @@ export function formstate( keyFn = foo => foo && foo.id, { persistExpandState } 
                     }
                 },
                 title ? label( title ) : '',
-                flexCenteredRow({style: { 'justify-content': 'space-around' }}, year, month, day )
+                flexCenteredRow( { style: { 'justify-content': 'space-around' } }, year, month, day )
             )
         }
     }
