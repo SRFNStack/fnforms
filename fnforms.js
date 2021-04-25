@@ -15,18 +15,25 @@ export function formstate( initialData ) {
     let isEditDefault = false
 
     class InputHandler {
-        constructor( { prop, transform, validations } ) {
+        constructor( { prop, transform, validations, getValue } ) {
+            if( getValue && typeof getValue !== 'function' ) {
+                throw 'getValue must be a function'
+            }
             this.transform = transform
             this.prop = prop
             this.validations = validations
             this.errors = fnstate( [] )
             this.isValid = fnstate( true )
             this.handleInput = this.handleInput.bind( this )
+            this.getValue = getValue
+            if( !this.getValue ) {
+                this.getValue = e => e.target.value
+            }
         }
 
         handleInput( e ) {
             isDirty( true )
-            let value = e.target.value
+            let value = this.getValue( e )
             let errs = []
             if( this.validations ) {
                 if( Array.isArray( this.validations ) ) {
@@ -98,9 +105,9 @@ export function formstate( initialData ) {
         )
     }
 
-    const newInput = ( { prop, type, style, transform, attrs, validations, initialValue } ) => {
+    const newInput = ( { prop, type, style, transform, attrs, validations, initialValue, getValue } ) => {
         initProp( prop, initialValue )
-        let inputHandler = new InputHandler( { prop, transform, validations } )
+        let inputHandler = new InputHandler( { prop, transform, validations, getValue } )
         return input(
             {
                 ...( attrs() ),
@@ -137,6 +144,7 @@ export function formstate( initialData ) {
                                   isEdit,
                                   onsubmit,
                                   onsuccess,
+                                  onerror,
                                   ...formAttrs
                               },
                               ...children
@@ -157,15 +165,26 @@ export function formstate( initialData ) {
                     ...formAttrs,
                     onsubmit: async e => {
                         e.preventDefault()
-                        const res = await onsubmit( e )
-                        if( res ) {
-                            data( res )
+                        try {
+                            const res = await onsubmit( e )
+
+                            if( res ) {
+                                data( res )
+                            }
+
                             isDirty( false )
                             if( typeof onsuccess === 'function' ) {
                                 onsuccess( res )
                             }
+
+                            return res
+                        } catch(e) {
+                            if( onerror ) {
+                                onerror( e )
+                            } else {
+                                throw e
+                            }
                         }
-                        return res
                     }
                 },
                 ...children
@@ -323,6 +342,7 @@ export function formstate( initialData ) {
                         prop,
                         initialValue,
                         validations,
+                        getValue: e => e.target.checked,
                         type: 'checkbox',
                         style,
                         attrs: () => ( {
@@ -377,11 +397,11 @@ export function formstate( initialData ) {
             options = options ?? {}
             const now = new Date()
             let dt = data.getPath( prop )
-            if(dt){
-                initialValue = dt
-            } else if( !( dt instanceof Date ) ) {
-                dt = new Date( dt )
-                data.setPath( prop, dt )
+            if( dt ) {
+                if( !( dt instanceof Date ) ) {
+                    dt = new Date( dt )
+                    data.setPath( prop, dt )
+                }
                 initialValue = dt
             } else {
                 initialValue = initialValue ?? now
@@ -470,6 +490,49 @@ export function formstate( initialData ) {
                 },
                 title ? label( title ) : '',
                 flexCenteredRow( { style: { 'justify-content': 'space-around' } }, year, month, day )
+            )
+        },
+        multiselect( {
+                         title,
+                         prop,
+                         options,
+                         initialValue
+                     } ) {
+            options = options ?? {}
+            let value = data.getPath( prop )
+            if( !value ) {
+                value = initialValue ?? []
+                initProp( prop, value )
+            }
+            if( !Array.isArray( value ) ) {
+                throw 'Value must be an array'
+            }
+            return div(
+                div( title ),
+                div( options.map(
+                    opt => flexRow(
+                        input(
+                            {
+                                type: 'checkbox',
+                                checked: data.bindAttr( () => data.getPath(prop).indexOf( opt ) > -1 ),
+                                oninput: e => {
+                                    let arr = data.getPath(prop)
+                                    let currentIdx = arr.indexOf( opt )
+                                    if( e.target.checked && currentIdx === -1 ) {
+                                        arr.push( opt )
+                                    } else {
+                                        if( currentIdx > -1 ) {
+                                            arr.splice( currentIdx, 1 )
+                                        }
+                                    }
+                                    data.setPath( prop, arr )
+                                }
+                            }
+                        ),
+                        opt
+                    )
+                     )
+                )
             )
         }
     }
