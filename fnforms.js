@@ -254,7 +254,8 @@ export function formstate( initialData ) {
                 initialValue = '',
                 placeHolder = null,
                 style,
-                validations
+                validations,
+                required
             }
         ) {
             if( typeof initialValue !== 'string' ) {
@@ -270,6 +271,7 @@ export function formstate( initialData ) {
                         type: 'text',
                         style,
                         attrs: () => ( {
+                            required: !!required,
                             value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
                             placeHolder
                         } )
@@ -288,7 +290,8 @@ export function formstate( initialData ) {
                 prop,
                 initialValue = null,
                 style,
-                validations
+                validations,
+                required
             }
         ) {
             return formInput(
@@ -324,6 +327,7 @@ export function formstate( initialData ) {
                         validations,
                         style,
                         attrs: () => ( {
+                            required: !!required,
                             value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
                             placeHolder: '0'
                         } )
@@ -404,7 +408,8 @@ export function formstate( initialData ) {
                 title,
                 prop,
                 options,
-                initialValue = new Date()
+                initialValue = new Date(),
+                required
             }
         ) {
             options = options ?? {}
@@ -453,26 +458,41 @@ export function formstate( initialData ) {
                     )
             )
 
-            const datePartSelect = ( { part, updateFn, placeholder, min, max } ) =>
+            const datePartSelect = ( { part, updateFn, placeholder, min, max, width } ) =>
                 flexCenteredRow(
-                    select(
+                    input(
                         {
+                            type: 'number',
+                            min,
+                            max,
+                            step: 1,
+                            style: {
+                                width: width || '65px'
+                            },
+                            required: !!required,
                             placeholder,
-                            oninput: e => setSelectedDatePart( part, parseInt( e.target.value ), updateFn )
-                        },
-                        ...intOptions( min, max, selectedDate()[ part ] )
+                            value: selectedDate()[ part ],
+                            oninput: e => {
+                                let i = parseInt( e.target.value )
+                                if( e.target.value ) {
+                                    if( i > max ) {
+                                        i = max
+                                        e.target.value = max
+                                    }
+                                    setSelectedDatePart( part, i, updateFn )
+                                }
+                            }
+                        }
                     ) )
 
-            const day = maxDay.bindAs(
-                () => datePartSelect(
-                    {
-                        part: 'day',
-                        updateFn: ( dt, day ) => dt.setDate( day ),
-                        placeholder: options.dayPlaceholder || 'Day:',
-                        min: 1,
-                        max: maxDay()
-                    }
-                )
+            const day = datePartSelect(
+                {
+                    part: 'day',
+                    updateFn: ( dt, day ) => dt.setDate( day ),
+                    placeholder: options.dayPlaceholder || 'Day:',
+                    min: 1,
+                    max: maxDay.bindAttr( maxDay )
+                }
             )
 
             const month = datePartSelect(
@@ -528,16 +548,16 @@ export function formstate( initialData ) {
             }
             return div(
                 div( {
-                         style:{
+                         style: {
                              'margin-bottom': '10px'
                          }
-                     },title ),
+                     }, title ),
                 div( options.map(
                     opt => flexRow(
                         input(
                             {
                                 type: 'checkbox',
-                                style:{
+                                style: {
                                     'margin-right': '15px'
                                 },
                                 checked: data.bindAttr( () => data.getPath( prop ).indexOf( opt ) > -1 ),
