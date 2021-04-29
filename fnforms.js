@@ -1,5 +1,5 @@
 import { fnstate } from '/lib/fntags.mjs'
-import { div, flexCenteredRow, flexRow, form, h2, i, input, label, option, section, select, span } from './fnelements.mjs'
+import { div, flexCenteredCol, flexCenteredRow, flexRow, form, h2, i, input, option, section, select, span } from './fnelements.mjs'
 import { afterRouteChange, beforeRouteChange, listenFor } from './fnroute.mjs'
 
 /**
@@ -93,14 +93,17 @@ export function formstate( initialData ) {
         }
     } )
 
-    function formInput( title, theInput ) {
-        return flexRow(
-            {
-                style: {
-                    'justify-content': 'space-between'
-                }
-            },
-            title ? label( title ) : '',
+    function formInput( title, theInput, style ) {
+        if( !style ) {
+            style = {
+                'justify-content': 'space-between',
+                display: 'flex',
+                'align-items': 'center'
+            }
+        }
+        return div(
+            { style },
+            title || '',
             theInput
         )
     }
@@ -271,7 +274,12 @@ export function formstate( initialData ) {
                             placeHolder
                         } )
                     }
-                )
+                ),
+                {
+                    display: 'grid',
+                    'grid-gap': '10px',
+                    'grid-template-columns': 'repeat(auto-fill, 300px )'
+                }
             )
         },
         float(
@@ -320,7 +328,12 @@ export function formstate( initialData ) {
                             placeHolder: '0'
                         } )
                     }
-                )
+                ),
+                {
+                    display: 'grid',
+                    'grid-gap': '10px',
+                    'grid-template-columns': 'repeat(auto-fill, 300px )'
+                }
             )
         },
         bool(
@@ -442,9 +455,9 @@ export function formstate( initialData ) {
 
             const datePartSelect = ( { part, updateFn, placeholder, min, max } ) =>
                 flexCenteredRow(
-                    div( { style: 'margin-right: 10px' }, placeholder ),
                     select(
                         {
+                            placeholder,
                             oninput: e => setSelectedDatePart( part, parseInt( e.target.value ), updateFn )
                         },
                         ...intOptions( min, max, selectedDate()[ part ] )
@@ -488,7 +501,13 @@ export function formstate( initialData ) {
                         'justify-content': 'space-between'
                     }
                 },
-                title ? label( title ) : '',
+                title ? flexCenteredCol(
+                    {
+                        style: {
+                            padding: '5px',
+                            'margin-bottom': '10px'
+                        }
+                    }, title ) : '',
                 flexCenteredRow( { style: { 'justify-content': 'space-around' } }, year, month, day )
             )
         },
@@ -508,15 +527,22 @@ export function formstate( initialData ) {
                 throw 'Value must be an array'
             }
             return div(
-                div( title ),
+                div( {
+                         style:{
+                             'margin-bottom': '10px'
+                         }
+                     },title ),
                 div( options.map(
                     opt => flexRow(
                         input(
                             {
                                 type: 'checkbox',
-                                checked: data.bindAttr( () => data.getPath(prop).indexOf( opt ) > -1 ),
+                                style:{
+                                    'margin-right': '15px'
+                                },
+                                checked: data.bindAttr( () => data.getPath( prop ).indexOf( opt ) > -1 ),
                                 oninput: e => {
-                                    let arr = data.getPath(prop)
+                                    let arr = data.getPath( prop )
                                     let currentIdx = arr.indexOf( opt )
                                     if( e.target.checked && currentIdx === -1 ) {
                                         arr.push( opt )
@@ -529,7 +555,7 @@ export function formstate( initialData ) {
                                 }
                             }
                         ),
-                        opt
+                        span( { style: { 'text-transform': 'capitalize' } }, opt )
                     )
                      )
                 )
