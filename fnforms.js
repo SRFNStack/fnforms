@@ -1,5 +1,20 @@
 import { fnstate } from '/lib/fntags.mjs'
-import { div, flexCenteredCol, flexCenteredRow, flexRow, form, h2, i, input, option, section, select, span } from './fnelements.mjs'
+import {
+    button,
+    datalist,
+    div,
+    flexCenteredCol,
+    flexCenteredRow,
+    flexRow,
+    form,
+    h2,
+    i,
+    input,
+    option,
+    section,
+    select,
+    span
+} from './fnelements.mjs'
 import { afterRouteChange, beforeRouteChange, listenFor } from './fnroute.mjs'
 
 /**
@@ -93,7 +108,7 @@ export function formstate( initialData ) {
         }
     } )
 
-    function formInput( title, theInput, style ) {
+    function formInput( { title, theInput, style, clazz } ) {
         if( !style ) {
             style = {
                 'justify-content': 'space-between',
@@ -102,7 +117,7 @@ export function formstate( initialData ) {
             }
         }
         return div(
-            { style },
+            { style, class: clazz },
             title || '',
             theInput
         )
@@ -123,6 +138,8 @@ export function formstate( initialData ) {
         )
     }
 
+    let theForm
+
     return {
         set( newData ) {
             data( newData )
@@ -134,11 +151,18 @@ export function formstate( initialData ) {
         getState() {
             return data
         },
+        submit() {
+            if( !theForm ) {
+                throw 'form not initialized'
+            }
+            theForm.dispatchEvent( new Event( 'submit', { 'cancelable': true } ) );
+        },
         /**
-         * Create a new form that is bound to this state
+         * Create the singleton form that is bound to this state. Subsequent calls will return the same form.
          * @param isEdit Whether the form should be in edit mode or not
          * @param onsubmit The onsubmit of the form, it should return the new data for the form state.
          * @param onsuccess A function that will be called with the saved data after it's submitted by onsubmit
+         * @param onerror A function that will be called if errors are thrown during onsubmit
          * @param formAttrs All other properties are passed as attributes to the form element
          * @param children The children of the form element
          * @return {HTMLFormElement}
@@ -152,6 +176,9 @@ export function formstate( initialData ) {
                               },
                               ...children
         ) {
+            if( theForm ) {
+                return theForm
+            }
             isEditDefault = !!isEdit
             clearListeners()
 
@@ -163,9 +190,10 @@ export function formstate( initialData ) {
                 clearAfterListener()
             } )
 
-            return form(
+            theForm = form(
                 {
                     ...formAttrs,
+                    class: 'fnforms-form',
                     onsubmit: async e => {
                         e.preventDefault()
                         try {
@@ -181,7 +209,7 @@ export function formstate( initialData ) {
                             }
 
                             return res
-                        } catch(e) {
+                        } catch( e ) {
                             if( onerror ) {
                                 onerror( e )
                             } else {
@@ -192,6 +220,7 @@ export function formstate( initialData ) {
                 },
                 ...children
             )
+            return theForm
         },
         isEdit: isEditState,
         isDirty,
@@ -214,27 +243,30 @@ export function formstate( initialData ) {
                 isExpanded( true )
             }
             return section(
+                {
+                    class: 'fnforms-formgroup'
+                },
                 title ? h2( {
+                        style: {
+                            'text-align': 'center',
+                            cursor: 'pointer'
+                        },
+                        onclick: () => expandable && isExpanded( !isExpanded() )
+                    },
+                    title,
+                    expandable ? span( { style: { float: 'right' } },
+                        i( {
                                 style: {
-                                    'text-align': 'center',
-                                    cursor: 'pointer'
-                                },
-                                onclick: () => expandable && isExpanded( !isExpanded() )
-                            },
-                            title,
-                            expandable ? span( { style: { float: 'right' } },
-                                               i( {
-                                                      style: {
-                                                          border: 'solid black',
-                                                          'border-width': '0 3px 3px 0',
-                                                          display: 'inline-block',
-                                                          padding: '3px',
-                                                          transform: isExpanded.bindStyle( () => isExpanded() ? 'rotate(45deg)' : 'rotate(-135deg)' )
-                                                      }
-                                                  }
-                                               )
-                                       )
-                                       : ''
+                                    border: 'solid black',
+                                    'border-width': '0 3px 3px 0',
+                                    display: 'inline-block',
+                                    padding: '3px',
+                                    transform: isExpanded.bindStyle( () => isExpanded() ? 'rotate(45deg)' : 'rotate(-135deg)' )
+                                }
+                            }
+                        )
+                        )
+                        : ''
                 ) : '',
                 div(
                     {
@@ -262,25 +294,28 @@ export function formstate( initialData ) {
                 initialValue = ''
             }
             return formInput(
-                title,
-                newInput(
-                    {
-                        prop,
-                        initialValue,
-                        validations,
-                        type: 'text',
-                        style,
-                        attrs: () => ( {
-                            required: !!required,
-                            value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
-                            placeHolder
-                        } )
-                    }
-                ),
                 {
-                    display: 'grid',
-                    'grid-gap': '10px',
-                    'grid-template-columns': 'repeat(auto-fill, 300px )'
+                    title,
+                    clazz: 'fnforms-text',
+                    theInput: newInput(
+                        {
+                            prop,
+                            initialValue,
+                            validations,
+                            type: 'text',
+                            style,
+                            attrs: () => ( {
+                                required: !!required,
+                                value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
+                                placeHolder
+                            } )
+                        }
+                    ),
+                    style: {
+                        display: 'grid',
+                        'grid-gap': '10px',
+                        'grid-template-columns': 'repeat(auto-fill, 300px )'
+                    }
                 }
             )
         },
@@ -295,48 +330,51 @@ export function formstate( initialData ) {
             }
         ) {
             return formInput(
-                title,
-                newInput(
-                    {
-                        prop,
-                        initialValue,
-                        type: 'text',
-                        transform: e => {
-                            let v = e.target.value
-                            //bad input is discarded instead of validations
-                            if( v.match( /^[+-]?([0-9]*[.])?[0-9]+$/ ) ) {
-                                //number is valid float format
-                                return v
-                            } else {
-                                if( v === '' ) {
-                                    return ''
+                {
+                    clazz: 'fnforms-float',
+                    title,
+                    theInput: newInput(
+                        {
+                            prop,
+                            initialValue,
+                            type: 'text',
+                            transform: e => {
+                                let v = e.target.value
+                                //bad input is discarded instead of validations
+                                if( v.match( /^[+-]?([0-9]*[.])?[0-9]+$/ ) ) {
+                                    //number is valid float format
+                                    return v
                                 } else {
-                                    //attempt to sanitize input
-                                    v = v.replaceAll( /[^-+0-9.]/g, '' )
-                                    if( v.match( /^[+-]?([0-9]*[.])?[0-9]*$/ ) ) {
-                                        //either only a +- sign or has a trailing .
-                                        return v
+                                    if( v === '' ) {
+                                        return ''
                                     } else {
-                                        //extra bad data
-                                        e.target.value = data.getPath( prop )
-                                        return data.getPath( prop )
+                                        //attempt to sanitize input
+                                        v = v.replaceAll( /[^-+0-9.]/g, '' )
+                                        if( v.match( /^[+-]?([0-9]*[.])?[0-9]*$/ ) ) {
+                                            //either only a +- sign or has a trailing .
+                                            return v
+                                        } else {
+                                            //extra bad data
+                                            e.target.value = data.getPath( prop )
+                                            return data.getPath( prop )
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        validations,
-                        style,
-                        attrs: () => ( {
-                            required: !!required,
-                            value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
-                            placeHolder: '0'
-                        } )
+                            },
+                            validations,
+                            style,
+                            attrs: () => ( {
+                                required: !!required,
+                                value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
+                                placeHolder: '0'
+                            } )
+                        }
+                    ),
+                    style: {
+                        display: 'grid',
+                        'grid-gap': '10px',
+                        'grid-template-columns': 'repeat(auto-fill, 300px )'
                     }
-                ),
-                {
-                    display: 'grid',
-                    'grid-gap': '10px',
-                    'grid-template-columns': 'repeat(auto-fill, 300px )'
                 }
             )
         },
@@ -353,54 +391,57 @@ export function formstate( initialData ) {
                 initialValue = false
             }
             return formInput(
-                title,
-                newInput(
-                    {
-                        prop,
-                        initialValue,
-                        validations,
-                        getValue: e => e.target.checked,
-                        type: 'checkbox',
-                        style,
-                        attrs: () => ( {
-                            checked: data.bindAttr( () => !!( data.getPath( prop ) || initialValue ) )
-                        } )
-                    }
-                )
+                {
+                    clazz: 'fnforms-bool',
+                    title,
+                    theInput: newInput(
+                        {
+                            prop,
+                            initialValue,
+                            validations,
+                            getValue: e => e.target.checked,
+                            type: 'checkbox',
+                            style,
+                            attrs: () => ( {
+                                checked: data.bindAttr( () => !!( data.getPath( prop ) || initialValue ) )
+                            } )
+                        }
+                    )
+                }
             )
         },
-        dropDown(
+        dropdown(
             {
                 title,
                 prop,
                 options,
                 validations
             } ) {
-            initProp( prop, options[ 0 ] )
+            initProp( prop, options[0] )
             let inputHandler = new InputHandler( { prop, validations } )
             return formInput(
-                title,
-
-                select(
-                    {
-                        style: {
-                            class: 'fnforms-drop-down-select',
-                            'text-transform': 'capitalize'
-                        },
-                        disabled: isEditState.bindAttr( () => !isEditState() ),
-                        oninput: inputHandler.handleInput
-                    },
-                    options.map(
-                        o => option(
-                            {
-                                value: o,
-                                class: 'fnforms-drop-down-option',
-                                selected: data.bindAttr( () => data.getPath( prop ) === o )
+                {
+                    title,
+                    clazz: 'fnforms-dropdown',
+                    theInput: select(
+                        {
+                            style: {
+                                'text-transform': 'capitalize'
                             },
-                            o.toLowerCase().replace( /[_]/, ' ' )
+                            disabled: isEditState.bindAttr( () => !isEditState() ),
+                            oninput: inputHandler.handleInput
+                        },
+                        options.map(
+                            o => option(
+                                {
+                                    value: o,
+                                    selected: data.bindAttr( () => data.getPath( prop ) === o )
+                                },
+                                o.toLowerCase().replace( /[_]/, ' ' )
+                            )
                         )
                     )
-                )
+                }
             )
         },
         date(
@@ -432,10 +473,10 @@ export function formstate( initialData ) {
 
             const selectedDate =
                 fnstate( {
-                             month: initialValue.getMonth() + 1,
-                             day: initialValue.getDate(),
-                             year: initialValue.getFullYear()
-                         } )
+                    month: initialValue.getMonth() + 1,
+                    day: initialValue.getDate(),
+                    year: initialValue.getFullYear()
+                } )
             const getMaxDay = () => new Date( selectedDate().year, selectedDate().month, 0 ).getDate()
             const maxDay = fnstate( getMaxDay() )
             const minYear = options.minYear ?? now.getFullYear() - 150
@@ -444,19 +485,11 @@ export function formstate( initialData ) {
             function setSelectedDatePart( part, value, updateFn ) {
                 let dt = data.getPath( prop )
                 updateFn( dt, value )
-                selectedDate.assign( { [ part ]: value } )
+                selectedDate.assign( { [part]: value } )
                 isDirty( true )
                 data.setPath( prop, dt )
                 maxDay( getMaxDay() )
             }
-
-            const intOptions = ( min, max, selectValue ) => Array( max - min + 1 ).fill( 0 ).map(
-                ( v, i ) =>
-                    option(
-                        { value: i + min, selected: selectValue === i + min },
-                        i + min
-                    )
-            )
 
             const datePartSelect = ( { part, updateFn, placeholder, min, max, width } ) =>
                 flexCenteredRow(
@@ -471,7 +504,7 @@ export function formstate( initialData ) {
                             },
                             required: !!required,
                             placeholder,
-                            value: selectedDate()[ part ],
+                            value: selectedDate()[part],
                             oninput: e => {
                                 let i = parseInt( e.target.value )
                                 if( e.target.value ) {
@@ -517,6 +550,7 @@ export function formstate( initialData ) {
 
             return div(
                 {
+                    class: 'fnforms-date',
                     style: {
                         'justify-content': 'space-between'
                     }
@@ -544,14 +578,17 @@ export function formstate( initialData ) {
                 initProp( prop, value )
             }
             if( !Array.isArray( value ) ) {
-                throw 'Value must be an array'
+                throw 'Value for multiselect must be an array'
             }
             return div(
+                {
+                    class: 'fnforms-multiselect'
+                },
                 div( {
-                         style: {
-                             'margin-bottom': '10px'
-                         }
-                     }, title ),
+                    style: {
+                        'margin-bottom': '10px'
+                    }
+                }, title ),
                 div( options.map(
                     opt => flexRow(
                         input(
@@ -577,7 +614,166 @@ export function formstate( initialData ) {
                         ),
                         span( { style: { 'text-transform': 'capitalize' } }, opt )
                     )
-                     )
+                    )
+                )
+            )
+        },
+        tags(
+            {
+                title,
+                prop,
+                placeholder,
+                initialValue,
+                tagLookupFn,
+                wrap,
+                unwrap
+            }
+        ) {
+            let value = data.getPath( prop )
+            if( !value ) {
+                value = initialValue ?? []
+                initProp( prop, value )
+            }
+            if( typeof unwrap === 'function' ) {
+                value = unwrap( value )
+            }
+            if( !Array.isArray( value ) ) {
+                throw 'Value for tags input must be an array'
+            }
+            value.filter( tag => typeof tag !== 'string' ).forEach( () => {
+                throw "All values must be strings"
+            } )
+            const tags = fnstate( value, tag => tag )
+            const matchingTags = fnstate( [], tag => tag )
+            const tagInputValue = fnstate( '' )
+
+            function update( tags ) {
+                if( typeof wrap === 'function' ) {
+                    tags = wrap( tags )
+                }
+                data.setPath( prop, tags )
+            }
+
+            function addTag( tag ) {
+                if( tag && tags().filter( t => t() === tag ).length === 0 ) {
+                    value = tag
+                    let newTags = tags().map( t => t() ).concat( value );
+                    update( newTags )
+                    tags( newTags )
+                }
+                tagInputValue( '' )
+                matchingTags( [] )
+            }
+
+            let tagInput = input(
+                {
+                    style: {
+                        'z-index': 1
+                    },
+                    placeholder: placeholder || '',
+                    value: tagInputValue.bindAttr( tagInputValue ),
+                    onkeypress: e => {
+                        if( e.key === 'Enter' ) {
+                            addTag( e.target.value )
+                        }
+                    },
+                    oninput: e => {
+                        tagInputValue( e.target.value )
+                        if( tagInputValue() && tagLookupFn ) {
+                            matchingTags( tagLookupFn( e.target.value ).filter( tag => {
+                                if( typeof tag !== 'string' ) throw 'all tags must be strings'
+                                return tags().filter( t => t() === tag ).length === 0
+                            } ) )
+                        } else {
+                            matchingTags( [] )
+                        }
+                    }
+                }
+            );
+            return div(
+                {
+                    class: 'fnforms-tags',
+                    style: {
+                        'text-align': 'center'
+                    }
+                },
+                div(
+                    {
+                        style: {
+                            display: isEditState.bindStyle( () => isEditState() ? 'inline-block' : 'none' ),
+                            'justify-content': 'center',
+                            position: 'relative',
+                        }
+                    },
+                    title || '',
+                    tagInput,
+                    button( {
+                        type: 'button', onclick: () => {
+                            addTag( tagInput.value )
+                        }
+                    }, '+' ),
+                    matchingTags.bindValues(
+                        div(
+                            {
+                                class: 'fnforms-tags-options',
+                                style: {
+                                    position: 'absolute',
+                                    bottom: -1,
+                                    background: 'white',
+                                    width: '100%',
+                                    padding: '10px 0',
+                                    'z-index': 2,
+                                    'border-left': '1px solid #707070',
+                                    'border-radius': '0px 0px 3px 3px',
+                                    'padding-top': '20px',
+                                    visibility: matchingTags.bindStyle( () => matchingTags().length > 0 ? 'visible' : 'hidden' )
+                                }
+                            } ),
+                        tag => option( {
+                                style: {
+                                    cursor: 'pointer'
+                                },
+                                onclick: () => addTag( tag() ),
+                            },
+                            tag()
+                        )
+                    )
+                ),
+                tags.bindValues(
+                    flexRow(
+                        {
+                            class: 'fnforms-tags-selected',
+                            style: {
+                                'flex-wrap': 'wrap'
+                            }
+                        }
+                    ),
+                    tag =>
+                        flexRow( {
+                                style: {
+                                    'justify-content': 'center',
+                                    'align-items': 'center',
+                                    'padding': '2px 8px 6px',
+                                    border: 'solid 1px',
+                                    'border-radius': '5px',
+                                    'margin-right': '4px'
+                                }
+                            }, tag(),
+                            span(
+                                {
+                                    style: {
+                                        'margin-left': '10px',
+                                        cursor: 'pointer',
+                                        display: isEditState.bindStyle( () => isEditState() ? 'inline' : 'none' )
+                                    },
+                                    onclick: () => {
+                                        let newTags = tags().filter( t => t() !== tag() );
+                                        update( newTags.map( t => t() ) )
+                                        tags( newTags )
+                                    }
+                                }, 'x'
+                            )
+                        )
                 )
             )
         }
