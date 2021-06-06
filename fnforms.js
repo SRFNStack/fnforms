@@ -1,7 +1,6 @@
 import { fnstate } from '/lib/fntags.mjs'
 import {
     button,
-    datalist,
     div,
     flexCenteredCol,
     flexCenteredRow,
@@ -13,7 +12,8 @@ import {
     option,
     section,
     select,
-    span
+    span,
+    textarea
 } from './fnelements.mjs'
 import { afterRouteChange, beforeRouteChange, listenFor } from './fnroute.mjs'
 
@@ -78,11 +78,19 @@ export function formstate( initialData ) {
 
     const confirmClearDirty = () => {
         if( isDirty() ) {
-            if( !confirm( 'Form has unsaved changes.\nLeaving this page will erase those changes.\nWould you like to continue?' ) ) {
+            if( !confirm( 'Form has unsaved changes.\n\nLeaving this page will erase those changes.\n\nWould you like to continue?' ) ) {
                 throw 'cancelled'
             }
         }
     }
+
+    let confirmReload = e => {
+        if( isDirty() ) {
+            e.preventDefault()
+            e.returnValue = 'rusure'
+        }
+    };
+    window.addEventListener( 'beforeunload', confirmReload )
 
     function clear() {
         clearListeners()
@@ -99,16 +107,10 @@ export function formstate( initialData ) {
             clearBeforeListener()
             clearBeforeListener = null
         }
+        window.removeEventListener( 'beforeUnload', confirmReload )
     }
 
-    window.addEventListener( 'beforeunload', e => {
-        if( isDirty() ) {
-            e.preventDefault()
-            e.returnValue = 'rusure'
-        }
-    } )
-
-    function formInput( { title, theInput, style, clazz } ) {
+    function formInput( { title, theInput, style, clazz, id } ) {
         if( !style ) {
             style = {
                 'justify-content': 'space-between',
@@ -117,28 +119,29 @@ export function formstate( initialData ) {
             }
         }
         return div(
-            { style, class: clazz },
+            { id, style, class: clazz },
             title || '',
             theInput
         )
     }
 
-    const newInput = ( { prop, type, style, transform, attrs, validations, initialValue, getValue } ) => {
+    const newInput = ( { prop, type, style, transform, attrs, validations, initialValue, getValue, useTextarea } ) => {
         initProp( prop, initialValue )
         let inputHandler = new InputHandler( { prop, transform, validations, getValue } )
-        return input(
-            {
-                ...( attrs() ),
-                name: prop,
-                type: type,
-                style,
-                oninput: inputHandler.handleInput,
-                disabled: isEditState.bindAttr( () => !isEditState() )
-            }
-        )
+        let params = {
+            ...( attrs() ),
+            name: prop,
+            type: type,
+            style,
+            oninput: inputHandler.handleInput,
+            disabled: isEditState.bindAttr( () => !isEditState() )
+        }
+        return useTextarea ? textarea( params ) : input( params )
     }
 
     let theForm
+
+    const fieldId = prop => 'fnforms-field-' + prop.replace(/\./, '-')
 
     return {
         set( newData ) {
@@ -186,8 +189,9 @@ export function formstate( initialData ) {
 
             clearBeforeListener = listenFor( beforeRouteChange, confirmClearDirty )
             clearAfterListener = listenFor( afterRouteChange, () => {
-                clearBeforeListener()
-                clearAfterListener()
+                clear()
+                clearBeforeListener && clearBeforeListener()
+                clearAfterListener && clearAfterListener()
             } )
 
             theForm = form(
@@ -229,6 +233,7 @@ export function formstate( initialData ) {
             {
                 title,
                 gridStyle,
+                style,
                 expandable = true,
                 isExpanded
             }, ...children
@@ -270,9 +275,9 @@ export function formstate( initialData ) {
                 ) : '',
                 div(
                     {
-                        style: Object.assign( gridStyle, {
-                            display: isExpanded.bindStyle( () => isExpanded() ? 'grid' : 'none' ),
-                            'justify-content': 'center'
+                        style: Object.assign( gridStyle || {}, {
+                            display: isExpanded.bindStyle( () => isExpanded() ? gridStyle ? 'grid' : 'block' : 'none' ),
+                            'justify-content': style && style['justify-content'] || 'center'
                         } )
                     },
                     ...children
@@ -287,7 +292,8 @@ export function formstate( initialData ) {
                 placeHolder = null,
                 style,
                 validations,
-                required
+                required,
+                useTextarea = false,
             }
         ) {
             if( typeof initialValue !== 'string' ) {
@@ -295,6 +301,7 @@ export function formstate( initialData ) {
             }
             return formInput(
                 {
+                    id: fieldId(prop),
                     title,
                     clazz: 'fnforms-text',
                     theInput: newInput(
@@ -303,7 +310,8 @@ export function formstate( initialData ) {
                             initialValue,
                             validations,
                             type: 'text',
-                            style,
+                            style: style || {},
+                            useTextarea,
                             attrs: () => ( {
                                 required: !!required,
                                 value: data.bindAttr( () => data.getPath( prop ) || initialValue ),
@@ -311,11 +319,7 @@ export function formstate( initialData ) {
                             } )
                         }
                     ),
-                    style: {
-                        display: 'grid',
-                        'grid-gap': '10px',
-                        'grid-template-columns': 'repeat(auto-fill, 300px )'
-                    }
+                    style: style || {}
                 }
             )
         },
@@ -331,6 +335,7 @@ export function formstate( initialData ) {
         ) {
             return formInput(
                 {
+                    id: fieldId(prop),
                     clazz: 'fnforms-float',
                     title,
                     theInput: newInput(
@@ -392,6 +397,7 @@ export function formstate( initialData ) {
             }
             return formInput(
                 {
+                    id: fieldId(prop),
                     clazz: 'fnforms-bool',
                     title,
                     theInput: newInput(
@@ -415,13 +421,16 @@ export function formstate( initialData ) {
                 title,
                 prop,
                 options,
+                style,
                 validations
             } ) {
             initProp( prop, options[0] )
             let inputHandler = new InputHandler( { prop, validations } )
             return formInput(
                 {
+                    id: fieldId(prop),
                     title,
+                    style,
                     clazz: 'fnforms-dropdown',
                     theInput: select(
                         {
@@ -449,6 +458,7 @@ export function formstate( initialData ) {
                 title,
                 prop,
                 options,
+                style,
                 initialValue = new Date(),
                 required
             }
@@ -550,10 +560,9 @@ export function formstate( initialData ) {
 
             return div(
                 {
+                    id: fieldId(prop),
                     class: 'fnforms-date',
-                    style: {
-                        'justify-content': 'space-between'
-                    }
+                    style: style || {}
                 },
                 title ? flexCenteredCol(
                     {
@@ -582,6 +591,7 @@ export function formstate( initialData ) {
             }
             return div(
                 {
+                    id: fieldId(prop),
                     class: 'fnforms-multiselect'
                 },
                 div( {
@@ -693,16 +703,19 @@ export function formstate( initialData ) {
             return div(
                 {
                     class: 'fnforms-tags',
+                    id: fieldId(prop),
                     style: {
                         'text-align': 'center'
                     }
                 },
                 div(
                     {
+                        class: 'fnforms-tags-input',
                         style: {
                             display: isEditState.bindStyle( () => isEditState() ? 'inline-block' : 'none' ),
                             'justify-content': 'center',
                             position: 'relative',
+                            'margin-bottom': '5px'
                         }
                     },
                     title || '',
@@ -724,6 +737,7 @@ export function formstate( initialData ) {
                                     padding: '10px 0',
                                     'z-index': 2,
                                     'border-left': '1px solid #707070',
+                                    'border-bottom': 'solid 1px #bfbfbf',
                                     'border-radius': '0px 0px 3px 3px',
                                     'padding-top': '20px',
                                     visibility: matchingTags.bindStyle( () => matchingTags().length > 0 ? 'visible' : 'hidden' )
