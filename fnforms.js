@@ -22,7 +22,7 @@ import { afterRouteChange, beforeRouteChange, listenFor } from './fnroute.mjs'
  * @param initialData The initial state data
  */
 export function formstate( initialData ) {
-    const initialJson = JSON.stringify( initialData )
+    let initialJson = JSON.stringify( initialData )
     const data = fnstate( JSON.parse( initialJson ) )
     let clearAfterListener
     let clearBeforeListener
@@ -200,6 +200,7 @@ export function formstate( initialData ) {
 
                             if( res ) {
                                 data( res )
+                                initialJson = JSON.stringify(res)
                             }
 
                             isDirty( false )
