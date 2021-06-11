@@ -200,7 +200,7 @@ export function formstate( initialData ) {
 
                             if( res ) {
                                 data( res )
-                                initialJson = JSON.stringify(res)
+                                initialJson = JSON.stringify( res )
                             }
 
                             isDirty( false )
@@ -499,30 +499,36 @@ export function formstate( initialData ) {
 
             const datePartSelect = ( { part, updateFn, placeholder, min, max, width } ) =>
                 flexCenteredRow(
-                    input(
-                        {
-                            type: 'number',
-                            min,
-                            max,
-                            step: 1,
-                            style: {
-                                width: width || '65px'
-                            },
-                            required: !!required,
-                            placeholder,
-                            value: selectedDate()[part],
-                            oninput: e => {
-                                let i = parseInt( e.target.value )
-                                if( e.target.value ) {
-                                    if( i > max ) {
-                                        i = max
-                                        e.target.value = max
+                    flexCenteredCol(
+                        span({style:{'text-transform':'capitalize'}},part),
+                        input(
+                            {
+                                type: 'number',
+                                min,
+                                max,
+                                step: 1,
+                                style: {
+                                    width: width || '65px',
+                                    'margin-left': '5px'
+                                },
+                                disabled: isEditState.bindAttr( () => !isEditState() ),
+                                required: !!required,
+                                placeholder,
+                                value: selectedDate()[part],
+                                oninput: e => {
+                                    let i = parseInt( e.target.value )
+                                    if( e.target.value ) {
+                                        if( i > max ) {
+                                            i = max
+                                            e.target.value = max
+                                        }
+                                        setSelectedDatePart( part, i, updateFn )
                                     }
-                                    setSelectedDatePart( part, i, updateFn )
                                 }
                             }
-                        }
-                    ) )
+                        )
+                    )
+                )
 
             const day = datePartSelect(
                 {
