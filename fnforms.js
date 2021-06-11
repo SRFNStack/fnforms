@@ -22,7 +22,8 @@ import { afterRouteChange, beforeRouteChange, listenFor } from './fnroute.mjs'
  * @param initialData The initial state data
  */
 export function formstate( initialData ) {
-    const data = fnstate( initialData )
+    const initialJson = JSON.stringify( initialData )
+    const data = fnstate( JSON.parse( initialJson ) )
     let clearAfterListener
     let clearBeforeListener
     const isEditState = fnstate( false )
@@ -91,11 +92,14 @@ export function formstate( initialData ) {
         }
     };
     window.addEventListener( 'beforeunload', confirmReload )
+    clearBeforeListener = listenFor( beforeRouteChange, confirmClearDirty )
+    clearAfterListener = listenFor( afterRouteChange, clear )
 
     function clear() {
         clearListeners()
         isDirty( false )
         isEditState( isEditDefault )
+        data( JSON.parse( initialJson ) )
     }
 
     function clearListeners() {
@@ -141,7 +145,7 @@ export function formstate( initialData ) {
 
     let theForm
 
-    const fieldId = prop => 'fnforms-field-' + prop.replace(/\./, '-')
+    const fieldId = prop => 'fnforms-field-' + prop.replace( /\./, '-' )
 
     return {
         set( newData ) {
@@ -183,16 +187,7 @@ export function formstate( initialData ) {
                 return theForm
             }
             isEditDefault = !!isEdit
-            clearListeners()
-
             isEditState( !!isEdit )
-
-            clearBeforeListener = listenFor( beforeRouteChange, confirmClearDirty )
-            clearAfterListener = listenFor( afterRouteChange, () => {
-                clear()
-                clearBeforeListener && clearBeforeListener()
-                clearAfterListener && clearAfterListener()
-            } )
 
             theForm = form(
                 {
@@ -289,7 +284,7 @@ export function formstate( initialData ) {
                 title,
                 prop,
                 initialValue = '',
-                placeHolder = null,
+                placeHolder = '',
                 style,
                 validations,
                 required,
@@ -301,7 +296,7 @@ export function formstate( initialData ) {
             }
             return formInput(
                 {
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     title,
                     clazz: 'fnforms-text',
                     theInput: newInput(
@@ -327,7 +322,7 @@ export function formstate( initialData ) {
             {
                 title,
                 prop,
-                initialValue = null,
+                initialValue = 0,
                 style,
                 validations,
                 required
@@ -335,7 +330,7 @@ export function formstate( initialData ) {
         ) {
             return formInput(
                 {
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     clazz: 'fnforms-float',
                     title,
                     theInput: newInput(
@@ -397,7 +392,7 @@ export function formstate( initialData ) {
             }
             return formInput(
                 {
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     clazz: 'fnforms-bool',
                     title,
                     theInput: newInput(
@@ -428,7 +423,7 @@ export function formstate( initialData ) {
             let inputHandler = new InputHandler( { prop, validations } )
             return formInput(
                 {
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     title,
                     style,
                     clazz: 'fnforms-dropdown',
@@ -560,7 +555,7 @@ export function formstate( initialData ) {
 
             return div(
                 {
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     class: 'fnforms-date',
                     style: style || {}
                 },
@@ -591,7 +586,7 @@ export function formstate( initialData ) {
             }
             return div(
                 {
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     class: 'fnforms-multiselect'
                 },
                 div( {
@@ -703,7 +698,7 @@ export function formstate( initialData ) {
             return div(
                 {
                     class: 'fnforms-tags',
-                    id: fieldId(prop),
+                    id: fieldId( prop ),
                     style: {
                         'text-align': 'center'
                     }
