@@ -2,6 +2,7 @@
   "name": "@srfnstack/fnforms",
   "version": "0.0.1",
   "description": "forms for fntags",
+  "private": false,
   "main": "fnforms.js",
   "scripts": {
     "test": "node test.js"
