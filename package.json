@@ -1,5 +1,5 @@
 {
-  "name": "fnforms",
+  "name": "@srfnstack/fnforms",
   "version": "0.0.1",
   "description": "forms for fntags",
   "main": "fnforms.js",
