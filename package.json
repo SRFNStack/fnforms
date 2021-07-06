@@ -4,6 +4,11 @@
   "description": "forms for fntags",
   "private": false,
   "main": "fnforms.js",
+  "files": [
+    "fnforms.js",
+    "LICENSE.txt",
+    "README.md"
+  ],
   "scripts": {
     "test": "node test.js"
   },
