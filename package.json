@@ -1,11 +1,11 @@
 {
   "name": "@srfnstack/fnforms",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "forms for fntags",
   "private": false,
-  "main": "fnforms.js",
+  "main": "fnforms.mjs",
   "files": [
-    "fnforms.js",
+    "fnforms.mjs",
     "LICENSE.txt",
     "README.md"
   ],
@@ -20,6 +20,7 @@
     "fntags",
     "forms"
   ],
+  "type": "module",
   "author": "Robert Kempton",
   "license": "MIT",
   "bugs": {
